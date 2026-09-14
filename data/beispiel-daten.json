@@ -1,0 +1,56 @@
+{
+  "fahrten": [
+    {
+      "id": "2026-09-13-01",
+      "datum": "2026-09-13",
+      "index": 1,
+      "start": "Frankfurt am Main",
+      "ziel": "Bitterfeld",
+      "zwischenziele": ["Erfurt", "Leipzig"],
+      "kilometer": 405,
+      "verbrauchPro100km": 7.8,
+      "verbrauchteLiter": 0,
+      "kosten": 0,
+      "notizen": "Beispielfahrt"
+    }
+  ],
+  "tankvorgaenge": [
+    {
+      "id": "2026-09-13-01",
+      "datum": "2026-09-13",
+      "index": 1,
+      "liter": 80,
+      "preisProLiter": 1.7,
+      "ort": "Tankstelle Frankfurt",
+      "notizen": "Vollgetankt",
+      "gesamtpreis": 136
+    }
+  ],
+  "favoriten": [
+    {
+      "type": "address",
+      "label": "Zuhause",
+      "brand": "",
+      "adresse": "Musterstraße 1, Frankfurt am Main"
+    },
+    {
+      "type": "address",
+      "label": "Arbeit",
+      "brand": "",
+      "adresse": "Frankfurt am Main"
+    },
+    {
+      "type": "fuelStation",
+      "label": "Stammtankstelle",
+      "brand": "Aral",
+      "adresse": "Frankfurt am Main"
+    }
+  ],
+  "einstellungen": {
+    "tankvolumen": 80,
+    "waehrung": "EUR",
+    "darkMode": true,
+    "oneDriveLink": "",
+    "initialized": true
+  }
+}

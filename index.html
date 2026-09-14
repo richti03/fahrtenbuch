@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Fahrtenbuch</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" defer></script>
+    <script type="module" src="js/app.js"></script>
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <h1>Fahrtenbuch</h1>
+        <p>Fahrten, Tankbestand und Kosten im Blick</p>
+      </div>
+      <nav class="tabs" aria-label="Hauptnavigation">
+        <button class="tab active" data-view="dashboard">Dashboard</button>
+        <button class="tab" data-view="fahrten">Fahrten</button>
+        <button class="tab" data-view="tanken">Tanken</button>
+        <button class="tab" data-view="favoriten">Favoriten</button>
+        <button class="tab" data-view="settings">Einstellungen</button>
+      </nav>
+    </header>
+
+    <main>
+      <aside id="warningBox" class="warning hidden"></aside>
+
+      <section id="dashboard" class="view active">
+        <div id="statsGrid" class="stats-grid"></div>
+        <section class="panel chart-controls">
+          <h2>Diagrammzeitraum</h2>
+          <div class="toolbar">
+            <label>Von <input id="chartFrom" type="date"></label>
+            <label>Bis <input id="chartTo" type="date"></label>
+          </div>
+        </section>
+        <div class="chart-grid">
+          <section class="panel"><h2>Kilometer pro Fahrt</h2><canvas id="kmChart"></canvas></section>
+          <section class="panel"><h2>Verbrauch pro Fahrt</h2><canvas id="literChart"></canvas></section>
+          <section class="panel"><h2>Kosten pro Fahrt</h2><canvas id="costChart"></canvas></section>
+          <section class="panel"><h2>Verbrauch / 100 km pro Fahrt</h2><canvas id="avgChart"></canvas></section>
+          <section class="panel wide"><h2>Preis / Liter</h2><canvas id="priceChart"></canvas></section>
+        </div>
+      </section>
+
+      <section id="fahrten" class="view">
+        <div class="split">
+          <form id="tripForm" class="panel form">
+            <h2 id="tripFormTitle">Neue Fahrt</h2>
+            <input type="hidden" name="editingId">
+            <div class="form-grid">
+              <label>Datum <input name="datum" type="date" required></label>
+              <label>Ordnungsfaktor <input name="index" type="number" min="1" step="1" placeholder="automatisch"></label>
+            </div>
+            <label>Start <div class="address-row"><input name="start" list="favoriteAddresses" required><button type="button" data-save-favorite="start" title="Als Favorit speichern">☆</button></div></label>
+            <div id="waypoints"></div>
+            <button class="ghost" type="button" id="addWaypoint">+ Zwischenziel</button>
+            <label>Ziel <div class="address-row"><input name="ziel" list="favoriteAddresses" required><button type="button" data-save-favorite="ziel" title="Als Favorit speichern">☆</button></div></label>
+            <div class="form-grid">
+              <label>Kilometer <input name="kilometer" type="number" min="0" step="0.1" required></label>
+              <label>Verbrauch / 100 km <input name="verbrauchPro100km" type="number" min="0" step="0.1" required></label>
+            </div>
+            <label>Notizen <textarea name="notizen" rows="3"></textarea></label>
+            <div class="actions">
+              <button type="submit">Speichern</button>
+              <button class="ghost" type="button" id="cancelTripEdit">Abbrechen</button>
+            </div>
+          </form>
+          <section class="panel table-panel">
+            <div class="toolbar">
+              <input id="tripSearch" placeholder="Fahrten durchsuchen">
+              <input id="tripFrom" type="date" title="Von">
+              <input id="tripTo" type="date" title="Bis">
+              <input id="kmMin" type="number" step="1" placeholder="km min">
+              <input id="kmMax" type="number" step="1" placeholder="km max">
+              <input id="consMin" type="number" step="0.1" placeholder="L/100 min">
+              <input id="consMax" type="number" step="0.1" placeholder="L/100 max">
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr>
+                  <th data-trip-sort="datum">Datum</th><th data-trip-sort="index">Ordnung</th><th data-trip-sort="start">Start</th><th data-trip-sort="ziel">Ziel</th>
+                  <th data-trip-sort="kilometer">Kilometer</th><th data-trip-sort="verbrauchPro100km">Verbrauch / 100 km</th>
+                  <th data-trip-sort="verbrauchteLiter">Verbrauchte Liter</th><th data-trip-sort="kosten">Kosten</th><th>Sonstige Notizen</th>
+                </tr></thead>
+                <tbody id="tripRows"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section id="tanken" class="view">
+        <div class="split">
+          <form id="fuelForm" class="panel form">
+            <h2 id="fuelFormTitle">Neuer Tankvorgang</h2>
+            <input type="hidden" name="editingId">
+            <label>Datum <input name="datum" type="date" required></label>
+            <label>Getankte Liter <input name="liter" type="number" min="0" step="0.01" required></label>
+            <label>Preis / Liter <input name="preisProLiter" type="number" min="0" step="0.001" required></label>
+            <label>Tankstelle / Ort <input name="ort" list="fuelStationFavorites" required></label>
+            <label>Notizen <textarea name="notizen" rows="3"></textarea></label>
+            <div class="actions"><button type="submit">Speichern</button><button class="ghost" type="button" id="cancelFuelEdit">Abbrechen</button></div>
+          </form>
+          <section class="panel table-panel">
+            <div id="fuelStockGrid" class="stats-grid compact"></div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Identifikation</th><th>Tankstelle / Ort</th><th>Getankte Liter</th><th>Preis / Liter</th><th>Gesamtpreis</th></tr></thead>
+                <tbody id="fuelRows"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section id="favoriten" class="view">
+        <div class="split">
+          <form id="favoriteForm" class="panel form">
+            <h2 id="favoriteFormTitle">Neuer Favorit</h2>
+            <input type="hidden" name="editingId">
+            <label>Typ
+              <select name="type">
+                <option value="address">Adressfavorit</option>
+                <option value="fuelStation">Tankstellenfavorit</option>
+              </select>
+            </label>
+            <label>Name <input name="label" required></label>
+            <label>Marke <input name="brand"></label>
+            <label>Adresse <input name="adresse" required></label>
+            <div class="actions"><button type="submit">Speichern</button><button class="ghost" type="button" id="cancelFavoriteEdit">Abbrechen</button></div>
+          </form>
+          <section class="panel table-panel">
+            <h2>Adressfavoriten</h2>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Name</th><th>Adresse</th><th></th></tr></thead>
+                <tbody id="addressFavoriteRows"></tbody>
+              </table>
+            </div>
+            <h2 class="section-title">Tankstellenfavoriten</h2>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Name</th><th>Marke</th><th>Adresse</th><th></th></tr></thead>
+                <tbody id="fuelFavoriteRows"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section id="settings" class="view">
+        <div class="split">
+          <form id="settingsForm" class="panel form">
+            <h2>Einstellungen</h2>
+            <label>Tankvolumen <input name="tankvolumen" type="number" min="0" step="1"></label>
+            <label>Währung <input name="waehrung" maxlength="8"></label>
+            <label class="check"><input name="darkMode" type="checkbox"> Dark Mode</label>
+            <button type="submit">Speichern</button>
+          </form>
+          <section class="panel form">
+            <h2>Synchronisierung</h2>
+            <p id="syncStatus" class="muted small">Nicht angemeldet.</p>
+            <label>E-Mail <input id="authEmail" type="email" autocomplete="email"></label>
+            <label>Passwort <input id="authPassword" type="password" autocomplete="current-password"></label>
+            <div class="actions">
+              <button id="signIn" type="button">Anmelden</button>
+              <button id="signUp" class="ghost" type="button">Registrieren</button>
+              <button id="signOut" class="ghost" type="button">Abmelden</button>
+            </div>
+            <button id="startFresh" class="ghost" type="button">Neu beginnen</button>
+            <button id="exportData" type="button">Aktuellen Stand als JSON exportieren</button>
+            <p class="muted small">Nach der Anmeldung werden Änderungen automatisch mit Supabase synchronisiert. Der JSON-Export bleibt als Backup erhalten.</p>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <datalist id="favoriteAddresses"></datalist>
+    <datalist id="fuelStationFavorites"></datalist>
+    <dialog id="startDialog">
+      <article class="form">
+        <h2>Datenquelle</h2>
+        <p class="muted small">Melde dich an, um Daten geräteübergreifend zu synchronisieren, oder beginne lokal mit einem leeren Datenbestand.</p>
+        <label>E-Mail <input id="startAuthEmail" type="email" autocomplete="email"></label>
+        <label>Passwort <input id="startAuthPassword" type="password" autocomplete="current-password"></label>
+        <div class="actions">
+          <button id="startSignIn" type="button">Anmelden</button>
+          <button id="startSignUp" class="ghost" type="button">Registrieren</button>
+          <button id="startNewData" class="ghost" type="button">Neu beginnen</button>
+        </div>
+      </article>
+    </dialog>
+    <dialog id="tripDialog">
+      <article id="tripDetail"></article>
+      <form method="dialog"><button>Schließen</button></form>
+    </dialog>
+    <dialog id="fuelDialog">
+      <article id="fuelDetail"></article>
+      <form method="dialog"><button>Schließen</button></form>
+    </dialog>
+  </body>
+</html>
