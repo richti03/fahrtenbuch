@@ -238,10 +238,16 @@ function bind() {
   });
   $("#exportData").addEventListener("click", () => downloadJson(data, "fahrtenbuch-export"));
   $("#startFresh").addEventListener("click", startFresh);
-  $("#signIn").addEventListener("click", () => authenticate($("#authEmail").value, $("#authPassword").value, false));
+  $("#authForm").addEventListener("submit", (event) => {
+    event.preventDefault();
+    authenticate($("#authEmail").value, $("#authPassword").value, false);
+  });
   $("#signUp").addEventListener("click", () => authenticate($("#authEmail").value, $("#authPassword").value, true));
   $("#signOut").addEventListener("click", logout);
-  $("#startSignIn").addEventListener("click", () => authenticate($("#startAuthEmail").value, $("#startAuthPassword").value, false, true));
+  $("#startAuthForm").addEventListener("submit", (event) => {
+    event.preventDefault();
+    authenticate($("#startAuthEmail").value, $("#startAuthPassword").value, false, true);
+  });
   $("#startSignUp").addEventListener("click", () => authenticate($("#startAuthEmail").value, $("#startAuthPassword").value, true, true));
   $("#startNewData").addEventListener("click", () => {
     data.einstellungen.initialized = true;

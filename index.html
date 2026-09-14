@@ -162,13 +162,17 @@
           <section class="panel form">
             <h2>Synchronisierung</h2>
             <p id="syncStatus" class="muted small">Nicht angemeldet.</p>
-            <label>E-Mail <input id="authEmail" type="email" autocomplete="email"></label>
-            <label>Passwort <input id="authPassword" type="password" autocomplete="current-password"></label>
-            <div class="actions">
-              <button id="signIn" type="button">Anmelden</button>
-              <button id="signUp" class="ghost" type="button">Registrieren</button>
-              <button id="signOut" class="ghost" type="button">Abmelden</button>
-            </div>
+            <form id="authForm" class="form" autocomplete="on">
+              <label for="authEmail">E-Mail</label>
+              <input id="authEmail" name="username" type="email" inputmode="email" autocomplete="username" required>
+              <label for="authPassword">Passwort</label>
+              <input id="authPassword" name="password" type="password" autocomplete="current-password" required>
+              <div class="actions">
+                <button id="signIn" type="submit">Anmelden</button>
+                <button id="signUp" class="ghost" type="button">Registrieren</button>
+                <button id="signOut" class="ghost" type="button">Abmelden</button>
+              </div>
+            </form>
             <button id="startFresh" class="ghost" type="button">Neu beginnen</button>
             <button id="exportData" type="button">Aktuellen Stand als JSON exportieren</button>
             <p class="muted small">Nach der Anmeldung werden Änderungen automatisch mit Supabase synchronisiert. Der JSON-Export bleibt als Backup erhalten.</p>
@@ -183,13 +187,17 @@
       <article class="form">
         <h2>Datenquelle</h2>
         <p class="muted small">Melde dich an, um Daten geräteübergreifend zu synchronisieren, oder beginne lokal mit einem leeren Datenbestand.</p>
-        <label>E-Mail <input id="startAuthEmail" type="email" autocomplete="email"></label>
-        <label>Passwort <input id="startAuthPassword" type="password" autocomplete="current-password"></label>
-        <div class="actions">
-          <button id="startSignIn" type="button">Anmelden</button>
-          <button id="startSignUp" class="ghost" type="button">Registrieren</button>
-          <button id="startNewData" class="ghost" type="button">Neu beginnen</button>
-        </div>
+        <form id="startAuthForm" class="form" autocomplete="on">
+          <label for="startAuthEmail">E-Mail</label>
+          <input id="startAuthEmail" name="username" type="email" inputmode="email" autocomplete="username" required>
+          <label for="startAuthPassword">Passwort</label>
+          <input id="startAuthPassword" name="password" type="password" autocomplete="current-password" required>
+          <div class="actions">
+            <button id="startSignIn" type="submit">Anmelden</button>
+            <button id="startSignUp" class="ghost" type="button">Registrieren</button>
+            <button id="startNewData" class="ghost" type="button">Neu beginnen</button>
+          </div>
+        </form>
       </article>
     </dialog>
     <dialog id="tripDialog">
