@@ -11,6 +11,8 @@ export function favoriteOptions(data) {
 export function renderFavorites(data, onEdit, onDelete) {
   renderFavoriteRows("#addressFavoriteRows", data.favoriten.filter((fav) => fav.type === "address"), false, onEdit, onDelete);
   renderFavoriteRows("#fuelFavoriteRows", data.favoriten.filter((fav) => fav.type === "fuelStation"), true, onEdit, onDelete);
+  renderFavoriteCards("#addressFavoriteCards", data.favoriten.filter((fav) => fav.type === "address"), false, onEdit, onDelete);
+  renderFavoriteCards("#fuelFavoriteCards", data.favoriten.filter((fav) => fav.type === "fuelStation"), true, onEdit, onDelete);
 }
 
 function renderFavoriteRows(selector, favorites, showBrand, onEdit, onDelete) {
@@ -19,16 +21,38 @@ function renderFavoriteRows(selector, favorites, showBrand, onEdit, onDelete) {
     .sort((a, b) => a.label.localeCompare(b.label))
     .map((fav) => `
       <tr>
-        <td>${escapeHtml(fav.label)}</td>
-        ${showBrand ? `<td>${escapeHtml(fav.brand || "")}</td>` : ""}
-        <td>${escapeHtml(fav.adresse)}</td>
-        <td class="row-actions">
+        <td data-label="Name">${escapeHtml(fav.label)}</td>
+        ${showBrand ? `<td data-label="Marke">${escapeHtml(fav.brand || "")}</td>` : ""}
+        <td data-label="Adresse">${escapeHtml(fav.adresse)}</td>
+        <td data-label="Aktionen" class="row-actions">
           <button class="ghost" data-fav-edit="${escapeHtml(fav.label)}">Bearbeiten</button>
           <button class="danger" data-fav-delete="${escapeHtml(fav.label)}">Löschen</button>
         </td>
       </tr>`).join("") || `<tr><td colspan="${showBrand ? 4 : 3}" class="muted">Keine Favoriten angelegt.</td></tr>`;
   body.querySelectorAll("[data-fav-edit]").forEach((button) => button.addEventListener("click", () => onEdit(button.dataset.favEdit)));
   body.querySelectorAll("[data-fav-delete]").forEach((button) => button.addEventListener("click", () => onDelete(button.dataset.favDelete)));
+}
+
+function renderFavoriteCards(selector, favorites, showBrand, onEdit, onDelete) {
+  const cards = document.querySelector(selector);
+  cards.innerHTML = favorites
+    .sort((a, b) => a.label.localeCompare(b.label))
+    .map((fav) => `
+      <article class="mobile-card">
+        <div class="card-head">
+          <div>
+            <span class="card-kicker">${showBrand ? escapeHtml(fav.brand || "Tankstelle") : "Adresse"}</span>
+            <strong>${escapeHtml(fav.label)}</strong>
+          </div>
+        </div>
+        <p class="card-sub">${escapeHtml(fav.adresse)}</p>
+        <div class="actions">
+          <button class="ghost" data-fav-card-edit="${escapeHtml(fav.label)}">Bearbeiten</button>
+          <button class="danger" data-fav-card-delete="${escapeHtml(fav.label)}">Löschen</button>
+        </div>
+      </article>`).join("") || `<p class="muted small">Keine Favoriten angelegt.</p>`;
+  cards.querySelectorAll("[data-fav-card-edit]").forEach((button) => button.addEventListener("click", () => onEdit(button.dataset.favCardEdit)));
+  cards.querySelectorAll("[data-fav-card-delete]").forEach((button) => button.addEventListener("click", () => onDelete(button.dataset.favCardDelete)));
 }
 
 export function fuelStationOptions(data) {

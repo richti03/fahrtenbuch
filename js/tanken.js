@@ -29,13 +29,32 @@ export function renderFuel(data, currency, onDetail) {
   const rows = [...data.tankvorgaenge].sort((a, b) => b.datum.localeCompare(a.datum) || b.index - a.index);
   body.innerHTML = rows.map((tank) => `
     <tr class="clickable" data-fuel-detail="${tank.id}">
-      <td>${escapeHtml(tank.id)}</td>
-      <td>${escapeHtml(tank.ort || "")}</td>
-      <td>${formatNumber(tank.liter)} L</td>
-      <td>${formatFuelPrice(tank.preisProLiter, currency)}</td>
-      <td>${formatMoney(tank.gesamtpreis, currency)}</td>
+      <td data-label="Identifikation">${escapeHtml(tank.id)}</td>
+      <td data-label="Tankstelle / Ort">${escapeHtml(tank.ort || "")}</td>
+      <td data-label="Getankte Liter">${formatNumber(tank.liter)} L</td>
+      <td data-label="Preis / Liter">${formatFuelPrice(tank.preisProLiter, currency)}</td>
+      <td data-label="Gesamtpreis">${formatMoney(tank.gesamtpreis, currency)}</td>
     </tr>`).join("") || `<tr><td colspan="5" class="muted">Noch keine Tankvorgänge erfasst.</td></tr>`;
   body.querySelectorAll("[data-fuel-detail]").forEach((row) => row.addEventListener("click", () => onDetail(row.dataset.fuelDetail)));
+
+  const cards = document.querySelector("#fuelCards");
+  cards.innerHTML = rows.map((tank) => `
+    <article class="mobile-card" data-fuel-card="${tank.id}">
+      <div class="card-head">
+        <div>
+          <span class="card-kicker">${escapeHtml(tank.datum)} (${tank.index})</span>
+          <strong>${escapeHtml(tank.ort || "Tankvorgang")}</strong>
+        </div>
+        <span class="card-price">${formatMoney(tank.gesamtpreis, currency)}</span>
+      </div>
+      <div class="metric-row">
+        <span>${formatNumber(tank.liter)} L</span>
+        <span>${formatFuelPrice(tank.preisProLiter, currency)}</span>
+        <span>${formatNumber(tank.verbrauchteLiter)} L verbraucht</span>
+      </div>
+      ${tank.notizen ? `<p class="card-sub">${escapeHtml(tank.notizen)}</p>` : ""}
+    </article>`).join("") || `<p class="muted small">Noch keine Tankvorgänge erfasst.</p>`;
+  cards.querySelectorAll("[data-fuel-card]").forEach((card) => card.addEventListener("click", () => onDetail(card.dataset.fuelCard)));
 }
 
 export const formatNumber = (value, digits = 2) => new Intl.NumberFormat("de-DE", { maximumFractionDigits: digits, minimumFractionDigits: digits }).format(Number(value) || 0);
@@ -51,10 +70,10 @@ export function fuelDetailHtml(tank, currency) {
   const remaining = Math.max(0, (Number(tank.liter) || 0) - (Number(tank.verbrauchteLiter) || 0));
   const usages = (tank.verbrauchsFahrten || []).map((usage) => `
     <tr class="clickable" data-fuel-trip="${escapeHtml(usage.fahrtId)}">
-      <td>${escapeHtml(usage.fahrtId)}</td>
-      <td>${escapeHtml(usage.datum)}</td>
-      <td>${formatNumber(usage.liter)} L</td>
-      <td>${formatMoney(usage.kosten, currency)}</td>
+      <td data-label="Fahrt">${escapeHtml(usage.fahrtId)}</td>
+      <td data-label="Datum">${escapeHtml(usage.datum)}</td>
+      <td data-label="Liter">${formatNumber(usage.liter)} L</td>
+      <td data-label="Kostenanteil">${formatMoney(usage.kosten, currency)}</td>
     </tr>`).join("") || `<tr><td colspan="4" class="muted">Aus diesem Tankvorgang wurde noch kein Kraftstoff verbraucht.</td></tr>`;
   return `
     <h2>${escapeHtml(tank.id)}</h2>

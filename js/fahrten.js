@@ -86,17 +86,37 @@ export function renderTrips(data, currency, onDetail) {
 
   body.innerHTML = rows.map((fahrt) => `
     <tr class="clickable" data-trip-detail="${fahrt.id}">
-      <td>${escapeHtml(formatTripDate(fahrt.datum))} ${fahrt.warnung ? `<span class="badge">Warnung</span>` : ""}</td>
-      <td>${escapeHtml(formatTripOrder(fahrt))}</td>
-      <td>${escapeHtml(fahrt.start)}</td>
-      <td>${escapeHtml(fahrt.ziel)}</td>
-      <td>${formatNumber(fahrt.kilometer, 1)} km</td>
-      <td>${formatNumber(fahrt.verbrauchPro100km, 1)} L</td>
-      <td>${formatNumber(fahrt.verbrauchteLiter)} L</td>
-      <td>${formatMoney(fahrt.kosten, currency)}</td>
-      <td>${formatNotes(fahrt.notizen)}</td>
+      <td data-label="Datum">${escapeHtml(formatTripDate(fahrt.datum))} ${fahrt.warnung ? `<span class="badge">Warnung</span>` : ""}</td>
+      <td data-label="Ordnung">${escapeHtml(formatTripOrder(fahrt))}</td>
+      <td data-label="Start">${escapeHtml(fahrt.start)}</td>
+      <td data-label="Ziel">${escapeHtml(fahrt.ziel)}</td>
+      <td data-label="Kilometer">${formatNumber(fahrt.kilometer, 1)} km</td>
+      <td data-label="Verbrauch / 100 km">${formatNumber(fahrt.verbrauchPro100km, 1)} L</td>
+      <td data-label="Verbrauchte Liter">${formatNumber(fahrt.verbrauchteLiter)} L</td>
+      <td data-label="Kosten">${formatMoney(fahrt.kosten, currency)}</td>
+      <td data-label="Notizen">${formatNotes(fahrt.notizen)}</td>
     </tr>`).join("") || `<tr><td colspan="9" class="muted">Keine passenden Fahrten gefunden.</td></tr>`;
   body.querySelectorAll("[data-trip-detail]").forEach((row) => row.addEventListener("click", () => onDetail(row.dataset.tripDetail)));
+
+  const cards = document.querySelector("#tripCards");
+  cards.innerHTML = rows.map((fahrt) => `
+    <article class="mobile-card" data-trip-card="${fahrt.id}">
+      <div class="card-head">
+        <div>
+          <span class="card-kicker">${escapeHtml(formatTripLabel(fahrt))}</span>
+          <strong>${escapeHtml(fahrt.start)} → ${escapeHtml(fahrt.ziel)}</strong>
+        </div>
+        ${fahrt.warnung ? `<span class="badge">Warnung</span>` : ""}
+      </div>
+      <div class="metric-row">
+        <span>${formatNumber(fahrt.kilometer, 1)} km</span>
+        <span>${formatNumber(fahrt.verbrauchPro100km, 1)} L/100</span>
+        <span>${formatMoney(fahrt.kosten, currency)}</span>
+      </div>
+      ${fahrt.zwischenziele?.length ? `<p class="card-sub">via ${fahrt.zwischenziele.map(escapeHtml).join(", ")}</p>` : ""}
+      ${formatNotes(fahrt.notizen) ? `<div class="card-note">${formatNotes(fahrt.notizen)}</div>` : ""}
+    </article>`).join("") || `<p class="muted small">Keine passenden Fahrten gefunden.</p>`;
+  cards.querySelectorAll("[data-trip-card]").forEach((card) => card.addEventListener("click", () => onDetail(card.dataset.tripCard)));
 }
 
 function compare(a, b) {
