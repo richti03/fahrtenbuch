@@ -299,7 +299,7 @@ dialog {
     max-width: calc(100vw - 16px);
     bottom: max(10px, env(safe-area-inset-bottom));
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 4px;
     padding: 6px;
     background: color-mix(in srgb, var(--surface) 94%, transparent);
@@ -321,7 +321,7 @@ dialog {
     white-space: normal;
   }
   main {
-    padding: 14px 12px calc(92px + env(safe-area-inset-bottom));
+    padding: 14px 12px calc(146px + env(safe-area-inset-bottom));
   }
   .stats-grid {
     grid-template-columns: 1fr 1fr;
@@ -456,3 +456,5 @@ dialog {
     text-align: left;
   }
 }
+
+#simulationResult { display: grid; gap: 16px; }

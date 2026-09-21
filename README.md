@@ -258,3 +258,48 @@ node --check js/app.js
 node --check js/supabase-sync.js
 node --check js/fifo.js
 ```
+
+## Fahrtsimulation
+
+Im Reiter **Simulation** die gesamte geplante Entfernung in Kilometern eingeben.
+Die App zeigt den geschätzten Verbrauch in l/100 km, die benötigten Liter und die
+Kraftstoffkosten. Es wird ein Fahrzeug pro Datenbestand angenommen. Simulationen
+werden nicht gespeichert und verändern weder Fahrten noch Tankbestand.
+
+Die Prognose berücksichtigt alle gültigen bisherigen Fahrten bis einschließlich
+heute, unabhängig von den Anzeige- und Zeitraumfiltern. Ähnlich lange und neuere
+Fahrten erhalten mehr Gewicht:
+
+```text
+Längengewicht = 1 / (1 + log2(bisherige Kilometer / geplante Kilometer)²)
+Zeitgewicht  = 0,5 ^ (Alter in Tagen / 180)
+Gewicht      = Längengewicht × Zeitgewicht
+Verbrauch    = Summe(Gewicht × Verbrauch pro 100 km) / Summe(Gewicht)
+Liter        = geplante Kilometer × Verbrauch / 100
+```
+
+Die Implementierung normalisiert die Zeitgewichte auf die neueste gültige Fahrt;
+das ändert den gewichteten Mittelwert nicht und vermeidet numerischen Unterlauf
+bei alten Daten. Ungültige, nicht positive und zukünftige Fahrteinträge werden
+nicht berücksichtigt. Unter fünf gültigen Fahrten erscheint ein Datenhinweis;
+unter drei Fahrten zwischen halber und doppelter geplanter Entfernung zusätzlich
+ein Hinweis auf wenig ähnliche Fahrten. Ohne Historie ist ein manueller Verbrauch
+nötig. Ein optionaler manueller Verbrauch ersetzt ansonsten die Prognose.
+
+Die Gewichtung ist eine heuristische Schätzung, keine validierte Vorhersage.
+Verkehr, Geschwindigkeit, Wetter und Straßenart werden nicht berücksichtigt.
+
+Vorhandener Kraftstoff wird aus den FIFO-Restschichten mit seinen Kaufpreisen
+bewertet. Fehlende Liter werden separat zum letzten gültigen bisherigen Tankpreis
+oder zum eingegebenen Nachkaufpreis geschätzt. Ohne Nachkaufpreis bleiben die
+Gesamtkosten offen; bekannte Teilkosten und Fehlmenge bleiben sichtbar. Der Button
+„Letzten Tankpreis übernehmen“ setzt einen manuell geänderten Nachkaufpreis zurück.
+Ein unvollständig erfasster Kraftstoffbestand wird als Einschränkung angezeigt.
+Die Berechnung verwendet intern ungerundete Werte; Ergebnisse werden auf zwei
+Nachkommastellen angezeigt. Die Kosten umfassen ausschließlich Kraftstoff.
+
+Die Berechnung und Oberfläche liegen in `js/simulation.js`. Tests ausführen:
+
+```bash
+node tests/simulation.test.mjs
+```

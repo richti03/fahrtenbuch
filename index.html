@@ -17,6 +17,7 @@
       <nav class="tabs" aria-label="Hauptnavigation">
         <button class="tab active" data-view="dashboard">Dashboard</button>
         <button class="tab" data-view="fahrten">Fahrten</button>
+        <button class="tab" data-view="simulation">Simulation</button>
         <button class="tab" data-view="tanken">Tanken</button>
         <button class="tab" data-view="favoriten">Favoriten</button>
         <button class="tab" data-view="settings">Einstellungen</button>
@@ -41,6 +42,23 @@
           <section class="panel"><h2>Kosten pro Fahrt</h2><canvas id="costChart"></canvas></section>
           <section class="panel"><h2>Verbrauch / 100 km pro Fahrt</h2><canvas id="avgChart"></canvas></section>
           <section class="panel wide"><h2>Preis / Liter</h2><canvas id="priceChart"></canvas></section>
+        </div>
+      </section>
+
+      <section id="simulation" class="view">
+        <div class="split">
+          <form id="simulationForm" class="panel form">
+            <h2>Fahrtsimulation</h2>
+            <label>Gesamte geplante Strecke (km)<input name="kilometers" type="number" min="0.01" step="any" required></label>
+            <label>Manueller Verbrauch (l/100 km, optional)<input name="manualConsumption" type="number" min="0.01" step="any" placeholder="Automatisch aus bisherigen Fahrten"></label>
+            <label>Literpreis für nachzutankenden Kraftstoff<input name="refillPrice" type="number" min="0.001" step="any"></label>
+            <button id="resetSimulationPrice" class="ghost" type="button">Letzten Tankpreis übernehmen</button>
+            <p>Der Nachkaufpreis gilt nur für fehlenden Kraftstoff. Vorhandener Bestand wird nach FIFO bewertet. Die Simulation speichert keine Fahrt und verändert den Tankbestand nicht.</p>
+          </form>
+          <section class="panel">
+            <h2>Geschätzter Verbrauch und Kosten</h2>
+            <div id="simulationResult" aria-live="polite" aria-atomic="true"></div>
+          </section>
         </div>
       </section>
 

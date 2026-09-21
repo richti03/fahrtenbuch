@@ -5,6 +5,8 @@ import { fuelDetailHtml, renderFuel, upsertFuel } from "./tanken.js";
 import { renderDashboard } from "./dashboard.js";
 import { getCurrentUser, loadRemoteData, saveRemoteData, signIn, signOut, signUp } from "./supabase-sync.js";
 
+import { bindSimulation, renderSimulation } from "./simulation.js";
+
 let data = loadData();
 let currentUser = null;
 let syncing = false;
@@ -29,6 +31,7 @@ function render() {
   $("#favoriteAddresses").innerHTML = favoriteOptions(data);
   $("#fuelStationFavorites").innerHTML = fuelStationOptions(data);
   renderDashboard(data);
+  renderSimulation(data);
   renderTrips(data, data.einstellungen.waehrung, showTripDetail);
   renderFuel(data, data.einstellungen.waehrung, showFuelDetail);
   renderFavorites(data, editFavorite, deleteFavorite);
@@ -198,6 +201,7 @@ function openView(id) {
 }
 
 function bind() {
+  bindSimulation(() => data);
   document.querySelectorAll(".tab").forEach((tab) => tab.addEventListener("click", () => openView(tab.dataset.view)));
   $("#addWaypoint").addEventListener("click", () => addWaypoint("", saveFavoriteFromAddress));
   $("#cancelTripEdit").addEventListener("click", resetTripForm);
