@@ -61,6 +61,7 @@ h2 { font-size: 18px; margin-bottom: 16px; }
 .small { font-size: 13px; line-height: 1.45; }
 
 .tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+.menu-toggle { display: none; }
 button, .file {
   border: 0;
   border-radius: 8px;
@@ -275,53 +276,14 @@ dialog {
 @media (max-width: 900px) {
   .app-header, .split { grid-template-columns: 1fr; display: grid; }
   .chart-grid { grid-template-columns: 1fr; }
-  .tabs { overflow-x: auto; flex-wrap: nowrap; padding-bottom: 4px; }
-  .tab { white-space: nowrap; }
+  .tabs { flex-wrap: wrap; padding-bottom: 4px; }
+  .tab { white-space: normal; }
 }
 
 @media (max-width: 700px) {
   body { font-size: 15px; }
-  .app-header {
-    position: sticky;
-    top: 0;
-    display: block;
-    padding: 12px 14px;
-    z-index: 10;
-    border-bottom: 1px solid var(--line);
-  }
-  .app-header p { display: none; }
-  h1 { font-size: 20px; }
-  .tabs {
-    position: fixed;
-    left: 8px;
-    right: 8px;
-    width: auto;
-    max-width: calc(100vw - 16px);
-    bottom: max(10px, env(safe-area-inset-bottom));
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 4px;
-    padding: 6px;
-    background: color-mix(in srgb, var(--surface) 94%, transparent);
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    box-shadow: 0 16px 38px rgba(0, 0, 0, .24);
-    backdrop-filter: blur(14px);
-    overflow: hidden;
-    z-index: 20;
-  }
-  .tab {
-    min-width: 0;
-    min-height: 46px;
-    padding: 8px 3px;
-    font-size: 10px;
-    line-height: 1.1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: normal;
-  }
   main {
-    padding: 14px 12px calc(146px + env(safe-area-inset-bottom));
+    padding: 14px 12px calc(24px + env(safe-area-inset-bottom));
   }
   .stats-grid {
     grid-template-columns: 1fr 1fr;
@@ -432,18 +394,6 @@ dialog {
   .stats-grid {
     grid-template-columns: 1fr;
   }
-  .tabs {
-    left: 4px;
-    right: 4px;
-    max-width: calc(100vw - 8px);
-    gap: 2px;
-    padding: 4px;
-  }
-  .tab {
-    font-size: 9px;
-    padding-left: 1px;
-    padding-right: 1px;
-  }
   .metric-row {
     display: grid;
     grid-template-columns: 1fr;
@@ -458,3 +408,42 @@ dialog {
 }
 
 #simulationResult { display: grid; gap: 16px; }
+
+/* Include wide phones in landscape, while retaining desktop navigation. */
+@media (max-width: 900px), (hover: none) and (pointer: coarse) and (max-height: 600px) {
+  .app-header {
+    position: sticky;
+    top: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 10px max(14px, env(safe-area-inset-right)) 10px max(14px, env(safe-area-inset-left));
+    z-index: 10;
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .app-header h1 { font-size: 20px; }
+  .app-header p { display: none; }
+  .menu-toggle { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; }
+  .tabs {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: max(8px, env(safe-area-inset-left));
+    right: max(8px, env(safe-area-inset-right));
+    padding: 8px;
+    gap: 4px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    box-shadow: 0 12px 24px rgba(0, 0, 0, .24);
+    max-height: calc(100vh - 80px - env(safe-area-inset-bottom));
+    max-height: calc(100dvh - 80px - env(safe-area-inset-bottom));
+    overflow-y: auto;
+  }
+  .tabs.menu-open { display: grid; grid-template-columns: 1fr; }
+  .tabs .tab { min-width: 0; min-height: 44px; text-align: left; font-size: 15px; white-space: normal; }
+}

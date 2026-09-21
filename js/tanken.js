@@ -3,12 +3,15 @@ import { escapeHtml, normalizeFavoriteAddress } from "./favorites.js";
 
 export function upsertFuel(data, form) {
   const editingId = form.editingId.value;
-  const datum = form.datum.value;
+  const inputDateTime = form.datum.value;
+  const datum = inputDateTime.slice(0, 10);
   const old = data.tankvorgaenge.find((item) => item.id === editingId);
   const index = old && old.datum === datum ? old.index : nextIndex(data.tankvorgaenge, datum, editingId);
   const record = {
     id: makeId(datum, index),
     datum,
+    datumZeit: old?.datumZeit && formatFuelDateTimeInput(old.datumZeit) === inputDateTime
+      ? old.datumZeit : new Date(inputDateTime).toISOString(),
     index,
     liter: Number(form.liter.value),
     preisProLiter: Number(form.preisProLiter.value),
@@ -29,12 +32,13 @@ export function renderFuel(data, currency, onDetail) {
   const rows = [...data.tankvorgaenge].sort((a, b) => b.datum.localeCompare(a.datum) || b.index - a.index);
   body.innerHTML = rows.map((tank) => `
     <tr class="clickable" data-fuel-detail="${tank.id}">
-      <td data-label="Identifikation">${escapeHtml(tank.id)}</td>
+      <td data-label="Identifikation">${escapeHtml(formatFuelIdentification(tank))}</td>
       <td data-label="Tankstelle / Ort">${escapeHtml(tank.ort || "")}</td>
       <td data-label="Getankte Liter">${formatNumber(tank.liter)} L</td>
       <td data-label="Preis / Liter">${formatFuelPrice(tank.preisProLiter, currency)}</td>
       <td data-label="Gesamtpreis">${formatMoney(tank.gesamtpreis, currency)}</td>
-    </tr>`).join("") || `<tr><td colspan="5" class="muted">Noch keine Tankvorgänge erfasst.</td></tr>`;
+      <td data-label="Notizen">${escapeHtml(tank.notizen || "")}<span class="auto-note">${formatNumber(tank.verbrauchteLiter)} / ${formatNumber(tank.liter)} L verbraucht</span></td>
+    </tr>`).join("") || `<tr><td colspan="6" class="muted">Noch keine Tankvorgänge erfasst.</td></tr>`;
   body.querySelectorAll("[data-fuel-detail]").forEach((row) => row.addEventListener("click", () => onDetail(row.dataset.fuelDetail)));
 
   const cards = document.querySelector("#fuelCards");
@@ -42,7 +46,7 @@ export function renderFuel(data, currency, onDetail) {
     <article class="mobile-card" data-fuel-card="${tank.id}">
       <div class="card-head">
         <div>
-          <span class="card-kicker">${escapeHtml(tank.datum)} (${tank.index})</span>
+          <span class="card-kicker">${escapeHtml(formatFuelIdentification(tank))}</span>
           <strong>${escapeHtml(tank.ort || "Tankvorgang")}</strong>
         </div>
         <span class="card-price">${formatMoney(tank.gesamtpreis, currency)}</span>
@@ -58,6 +62,21 @@ export function renderFuel(data, currency, onDetail) {
 }
 
 export const formatNumber = (value, digits = 2) => new Intl.NumberFormat("de-DE", { maximumFractionDigits: digits, minimumFractionDigits: digits }).format(Number(value) || 0);
+// datetime-local uses the browser's local timezone; Supabase stores the instant in UTC.
+export function formatFuelDateTimeInput(value) {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "";
+  const pad = (number) => String(number).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+export function formatFuelIdentification(tank) {
+  const date = new Date(tank.datumZeit || `${tank.datum}T00:00`);
+  if (!Number.isFinite(date.getTime())) return "";
+  return new Intl.DateTimeFormat("de-DE", {
+    day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false,
+  }).format(date);
+}
 export const formatMoney = (value, currency = "EUR") => new Intl.NumberFormat("de-DE", { style: "currency", currency: currency || "EUR" }).format(Number(value) || 0);
 export function formatFuelPrice(value, currency = "EUR") {
   const amount = (Number(value) || 0).toFixed(3).replace(".", ",");
@@ -76,9 +95,9 @@ export function fuelDetailHtml(tank, currency) {
       <td data-label="Kostenanteil">${formatMoney(usage.kosten, currency)}</td>
     </tr>`).join("") || `<tr><td colspan="4" class="muted">Aus diesem Tankvorgang wurde noch kein Kraftstoff verbraucht.</td></tr>`;
   return `
-    <h2>${escapeHtml(tank.id)}</h2>
+    <h2>${escapeHtml(formatFuelIdentification(tank))}</h2>
     <dl class="detail-grid">
-      <dt>Datum</dt><dd>${escapeHtml(tank.datum)}</dd>
+      <dt>Datum</dt><dd>${escapeHtml(formatFuelIdentification(tank))}</dd>
       <dt>Tankstelle / Ort</dt><dd>${escapeHtml(tank.ort || "")}</dd>
       <dt>Getankte Liter</dt><dd>${formatNumber(tank.liter)} L</dd>
       <dt>Preis / Liter</dt><dd>${formatFuelPrice(tank.preisProLiter, currency)}</dd>

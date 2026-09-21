@@ -14,7 +14,8 @@
         <h1>Fahrtenbuch</h1>
         <p>Fahrten, Tankbestand und Kosten im Blick</p>
       </div>
-      <nav class="tabs" aria-label="Hauptnavigation">
+      <button id="menuToggle" class="menu-toggle" type="button" aria-controls="mainNavigation" aria-expanded="false" aria-label="Menü öffnen"><span aria-hidden="true">☰</span> Menü</button>
+      <nav id="mainNavigation" class="tabs" aria-label="Hauptnavigation">
         <button class="tab active" data-view="dashboard">Dashboard</button>
         <button class="tab" data-view="fahrten">Fahrten</button>
         <button class="tab" data-view="simulation">Simulation</button>
@@ -115,7 +116,7 @@
           <form id="fuelForm" class="panel form">
             <h2 id="fuelFormTitle">Neuer Tankvorgang</h2>
             <input type="hidden" name="editingId">
-            <label>Datum <input name="datum" type="date" required></label>
+            <label>Datum und Uhrzeit <input name="datum" type="datetime-local" required></label>
             <label>Getankte Liter <input name="liter" type="number" min="0" step="0.01" required></label>
             <label>Preis / Liter <input name="preisProLiter" type="number" min="0" step="0.001" required></label>
             <label>Tankstelle / Ort <input name="ort" list="fuelStationFavorites" required></label>
@@ -126,7 +127,7 @@
             <div id="fuelStockGrid" class="stats-grid compact"></div>
             <div class="table-wrap">
               <table>
-                <thead><tr><th>Identifikation</th><th>Tankstelle / Ort</th><th>Getankte Liter</th><th>Preis / Liter</th><th>Gesamtpreis</th></tr></thead>
+                <thead><tr><th>Identifikation</th><th>Tankstelle / Ort</th><th>Getankte Liter</th><th>Preis / Liter</th><th>Gesamtpreis</th><th>Notizen</th></tr></thead>
                 <tbody id="fuelRows"></tbody>
               </table>
             </div>

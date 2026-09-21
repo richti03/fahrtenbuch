@@ -1,7 +1,7 @@
 import { defaultData, downloadJson, loadData, saveData } from "./storage.js";
 import { favoriteOptions, fuelStationOptions, renderFavorites } from "./favorites.js";
 import { addWaypoint, bindTripSorting, editableNotes, renderTrips, setWaypoints, tripDetailHtml, upsertTrip } from "./fahrten.js";
-import { fuelDetailHtml, renderFuel, upsertFuel } from "./tanken.js";
+import { fuelDetailHtml, formatFuelDateTimeInput, renderFuel, upsertFuel } from "./tanken.js";
 import { renderDashboard } from "./dashboard.js";
 import { getCurrentUser, loadRemoteData, saveRemoteData, signIn, signOut, signUp } from "./supabase-sync.js";
 
@@ -51,7 +51,7 @@ function resetTripForm() {
 
 function resetFuelForm() {
   $("#fuelForm").reset();
-  $("#fuelForm").datum.valueAsDate = new Date();
+  $("#fuelForm").datum.value = formatFuelDateTimeInput(new Date());
   $("#fuelForm").editingId.value = "";
   $("#fuelFormTitle").textContent = "Neuer Tankvorgang";
 }
@@ -135,7 +135,7 @@ function editFuel(id) {
   const tank = data.tankvorgaenge.find((item) => item.id === id);
   const form = $("#fuelForm");
   form.editingId.value = tank.id;
-  form.datum.value = tank.datum;
+  form.datum.value = formatFuelDateTimeInput(tank.datumZeit || `${tank.datum}T00:00`);
   form.liter.value = tank.liter;
   form.preisProLiter.value = tank.preisProLiter;
   form.ort.value = tank.ort || "";
@@ -195,13 +195,38 @@ function syncSettingsForm() {
   setSyncStatus(currentUser ? `Angemeldet als ${currentUser.email}.` : "Nicht angemeldet.");
 }
 
+function setMenuOpen(open, restoreFocus = false) {
+  $("#mainNavigation").classList.toggle("menu-open", open);
+  $("#menuToggle").setAttribute("aria-expanded", String(open));
+  $("#menuToggle").setAttribute("aria-label", open ? "Menü schließen" : "Menü öffnen");
+  if (restoreFocus) $("#menuToggle").focus();
+}
+
 function openView(id) {
+  const menuWasOpen = $("#menuToggle").getAttribute("aria-expanded") === "true";
+  setMenuOpen(false, menuWasOpen);
   document.querySelectorAll(".view").forEach((view) => view.classList.toggle("active", view.id === id));
   document.querySelectorAll(".tab").forEach((tab) => tab.classList.toggle("active", tab.dataset.view === id));
 }
 
 function bind() {
   bindSimulation(() => data);
+  $("#menuToggle").addEventListener("click", () => {
+    setMenuOpen($("#menuToggle").getAttribute("aria-expanded") !== "true");
+  });
+  document.addEventListener("click", (event) => {
+    if (!event.target.closest("#mainNavigation, #menuToggle")) setMenuOpen(false);
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && $("#menuToggle").getAttribute("aria-expanded") === "true") {
+      setMenuOpen(false, true);
+    }
+  });
+  document.addEventListener("focusin", (event) => {
+    if (!event.target.closest("#mainNavigation, #menuToggle")) setMenuOpen(false);
+  });
+  window.matchMedia("(max-width: 900px), (hover: none) and (pointer: coarse) and (max-height: 600px)")
+    .addEventListener("change", () => setMenuOpen(false));
   document.querySelectorAll(".tab").forEach((tab) => tab.addEventListener("click", () => openView(tab.dataset.view)));
   $("#addWaypoint").addEventListener("click", () => addWaypoint("", saveFavoriteFromAddress));
   $("#cancelTripEdit").addEventListener("click", resetTripForm);

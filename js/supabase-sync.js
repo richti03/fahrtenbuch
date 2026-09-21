@@ -2,6 +2,7 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "./supabase-config.js";
 import { defaultData, validateData } from "./storage.js";
 import { makeId, nextIndex } from "./fifo.js";
+import { formatFuelDateTimeInput } from "./tanken.js";
 
 const TABLES = {
   trips: "fahrten",
@@ -113,11 +114,12 @@ function mapFuelFromRemote(rows) {
   const sorted = [...rows].sort((a, b) => String(a.datum).localeCompare(String(b.datum)) || String(a.created_at).localeCompare(String(b.created_at)));
   const local = [];
   for (const row of sorted) {
-    const datum = dateOnly(row.datum || row.created_at);
+    const datum = formatFuelDateTimeInput(row.datum || row.created_at).slice(0, 10);
     const index = nextIndex(local, datum);
     local.push({
       id: makeId(datum, index),
       datum,
+      datumZeit: row.datum || row.created_at || null,
       index,
       liter: Number(row.liter) || 0,
       preisProLiter: Number(row.preis_pro_liter) || 0,
@@ -148,7 +150,7 @@ function mapTripToRemote(fahrt, userId) {
 function mapFuelToRemote(tank, userId) {
   return {
     user_id: userId,
-    datum: `${tank.datum}T00:00:00.000Z`,
+    datum: tank.datumZeit || `${tank.datum}T00:00:00.000Z`,
     liter: Number(tank.liter) || 0,
     preis_pro_liter: Number(tank.preisProLiter) || 0,
     created_at: tank.createdAt || new Date().toISOString(),
