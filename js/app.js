@@ -1,4 +1,4 @@
-import { defaultData, downloadJson, loadData, saveData } from "./storage.js";
+import { downloadJson, loadData, saveData } from "./storage.js";
 import { favoriteOptions, fuelStationOptions, renderFavorites } from "./favorites.js";
 import { addWaypoint, bindTripSorting, editableNotes, renderTrips, setWaypoints, tripDetailHtml, upsertTrip } from "./fahrten.js";
 import { fuelDetailHtml, formatFuelDateTimeInput, renderFuel, upsertFuel } from "./tanken.js";
@@ -266,7 +266,6 @@ function bind() {
     persist();
   });
   $("#exportData").addEventListener("click", () => downloadJson(data, "fahrtenbuch-export"));
-  $("#startFresh").addEventListener("click", startFresh);
   $("#authForm").addEventListener("submit", (event) => {
     event.preventDefault();
     authenticate($("#authEmail").value, $("#authPassword").value, false);
@@ -278,11 +277,6 @@ function bind() {
     authenticate($("#startAuthEmail").value, $("#startAuthPassword").value, false, true);
   });
   $("#startSignUp").addEventListener("click", () => authenticate($("#startAuthEmail").value, $("#startAuthPassword").value, true, true));
-  $("#startNewData").addEventListener("click", () => {
-    data.einstellungen.initialized = true;
-    persist();
-    $("#startDialog").close();
-  });
 }
 
 async function authenticate(email, password, createAccount, closeStart = false) {
@@ -324,13 +318,6 @@ async function logout() {
   currentUser = null;
   setSyncStatus("Nicht angemeldet.");
   render();
-}
-
-function startFresh() {
-  if (!confirm("Wirklich mit einem leeren Datenbestand neu beginnen?")) return;
-  data = defaultData();
-  data.einstellungen.initialized = true;
-  persist();
 }
 
 function setSyncStatus(message) {

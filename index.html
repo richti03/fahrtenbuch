@@ -196,7 +196,6 @@
                 <button id="signOut" class="ghost" type="button">Abmelden</button>
               </div>
             </form>
-            <button id="startFresh" class="ghost" type="button">Neu beginnen</button>
             <button id="exportData" type="button">Aktuellen Stand als JSON exportieren</button>
             <p class="muted small">Nach der Anmeldung werden Änderungen automatisch mit Supabase synchronisiert. Der JSON-Export bleibt als Backup erhalten.</p>
           </section>
@@ -209,7 +208,7 @@
     <dialog id="startDialog">
       <article class="form">
         <h2>Datenquelle</h2>
-        <p class="muted small">Melde dich an, um Daten geräteübergreifend zu synchronisieren, oder beginne lokal mit einem leeren Datenbestand.</p>
+        <p class="muted small">Melde dich an, um Daten geräteübergreifend zu synchronisieren.</p>
         <form id="startAuthForm" class="form" autocomplete="on">
           <label for="startAuthEmail">E-Mail</label>
           <input id="startAuthEmail" name="username" type="email" inputmode="email" autocomplete="username" required>
@@ -218,7 +217,6 @@
           <div class="actions">
             <button id="startSignIn" type="submit">Anmelden</button>
             <button id="startSignUp" class="ghost" type="button">Registrieren</button>
-            <button id="startNewData" class="ghost" type="button">Neu beginnen</button>
           </div>
         </form>
       </article>
