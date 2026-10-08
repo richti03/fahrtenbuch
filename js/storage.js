@@ -22,7 +22,7 @@ export function validateData(value) {
       brand: fav.brand || "",
       adresse: fav.adresse || "",
     })).filter((fav) => fav.label && fav.adresse),
-    tankvorgaenge: value.tankvorgaenge.map((tank) => ({ ort: "", notizen: "", verbrauchteLiter: 0, verbrauchsFahrten: [], ...tank })),
+    tankvorgaenge: value.tankvorgaenge.map((tank) => ({ vollgetankt: false, zielbestandLiter: null, ort: "", notizen: "", verbrauchteLiter: 0, verbrauchsFahrten: [], ...tank, lokaleKennung: tank.lokaleKennung || crypto.randomUUID() })),
     einstellungen: { ...defaultData().einstellungen, ...(value.einstellungen || {}) },
   };
 }

@@ -68,10 +68,8 @@
           <form id="tripForm" class="panel form">
             <h2 id="tripFormTitle">Neue Fahrt</h2>
             <input type="hidden" name="editingId">
-            <div class="form-grid">
-              <label>Datum <input name="datum" type="date" required></label>
-              <label>Ordnungsfaktor <input name="index" type="number" min="1" step="1" placeholder="automatisch"></label>
-            </div>
+            <input name="index" type="hidden">
+            <label>Datum <input name="datum" type="date" required></label>
             <label>Start <div class="address-row"><input name="start" list="favoriteAddresses" required><button type="button" data-save-favorite="start" title="Als Favorit speichern">☆</button></div></label>
             <div id="waypoints"></div>
             <button class="ghost" type="button" id="addWaypoint">+ Zwischenziel</button>
@@ -99,7 +97,7 @@
             <div class="table-wrap">
               <table>
                 <thead><tr>
-                  <th data-trip-sort="datum">Datum</th><th data-trip-sort="index">Ordnung</th><th data-trip-sort="start">Start</th><th data-trip-sort="ziel">Ziel</th>
+                  <th data-trip-sort="datum">Datum</th><th data-trip-sort="start">Start</th><th data-trip-sort="ziel">Ziel</th>
                   <th data-trip-sort="kilometer">Kilometer</th><th data-trip-sort="verbrauchPro100km">Verbrauch / 100 km</th>
                   <th data-trip-sort="verbrauchteLiter">Verbrauchte Liter</th><th data-trip-sort="kosten">Kosten</th><th>Sonstige Notizen</th>
                 </tr></thead>
@@ -120,6 +118,13 @@
             <label>Getankte Liter <input name="liter" type="number" min="0" step="0.01" required></label>
             <label>Preis / Liter <input name="preisProLiter" type="number" min="0" step="0.001" required></label>
             <label>Tankstelle / Ort <input name="ort" list="fuelStationFavorites" required></label>
+            <label class="check full-tank-check"><input name="vollgetankt" type="checkbox"><span>Vollgetankt – Bestand abgleichen</span></label>
+            <p id="fuelSchemaHint" class="small muted" role="status"></p>
+            <input name="zielbestandLiter" type="hidden">
+            <details class="fuel-info">
+              <summary>ⓘ Info zum Volltanken</summary>
+              <p>Der Zielbestand kommt aus dem Tankvolumen in den Einstellungen. Die Tankung berücksichtigt alle bereits erfassten Fahrten bis einschließlich des Tanktags. Später erfasste Ereignisse desselben Tages folgen danach. Korrekturen werden vor dem Speichern zur Zustimmung angezeigt.</p>
+            </details>
             <label>Notizen <textarea name="notizen" rows="3"></textarea></label>
             <div class="actions"><button type="submit">Speichern</button><button class="ghost" type="button" id="cancelFuelEdit">Abbrechen</button></div>
           </form>
@@ -220,6 +225,16 @@
           </div>
         </form>
       </article>
+    </dialog>
+    <dialog id="correctionDialog" aria-labelledby="correctionTitle">
+      <h2 id="correctionTitle">Bestandskorrekturen prüfen</h2>
+      <p>Diese Korrekturzeilen werden erst nach deiner Zustimmung angelegt oder geändert. Korrekturen zählen nicht zu den Dashboard-Statistiken.</p>
+      <div id="correctionOverview"></div>
+      <form method="dialog" class="actions">
+        <button value="approve">Korrekturen übernehmen</button>
+        <button id="declineCorrection" value="decline" class="ghost">Tankung ohne Abgleich speichern</button>
+        <button value="cancel" class="ghost" autofocus>Abbrechen</button>
+      </form>
     </dialog>
     <dialog id="tripDialog">
       <article id="tripDetail"></article>

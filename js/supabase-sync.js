@@ -2,6 +2,7 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "./supabase-config.js";
 import { defaultData, validateData } from "./storage.js";
 import { makeId, nextIndex } from "./fifo.js";
+import { compatibleRows, inspectSchema, preflightRows, MIGRATION_MESSAGE } from "./supabase-schema.js";
 import { formatFuelDateTimeInput } from "./tanken.js";
 
 const TABLES = {
@@ -10,6 +11,9 @@ const TABLES = {
   addressFavorites: "favoritenAdressen",
   fuelFavorites: "favoritenTankstelle",
 };
+
+let remoteCapabilities = null;
+export const getRemoteCapabilities = () => remoteCapabilities;
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
@@ -40,6 +44,9 @@ export async function loadRemoteData() {
   const user = await getCurrentUser();
   if (!user) return null;
 
+  remoteCapabilities = null;
+  remoteCapabilities = await inspectSchema(supabase, user.id);
+
   const [trips, fuel, addressFavorites, fuelFavorites] = await Promise.all([
     selectRows(TABLES.trips).eq("user_id", user.id),
     selectRows(TABLES.fuel).eq("user_id", user.id),
@@ -66,10 +73,25 @@ export async function saveRemoteData(fahrtenbuchData) {
   if (!user) return;
   const data = validateData(fahrtenbuchData);
 
-  await replaceUserRows(TABLES.trips, user.id, data.fahrten.map((fahrt) => mapTripToRemote(fahrt, user.id)));
-  await replaceUserRows(TABLES.fuel, user.id, data.tankvorgaenge.map((tank) => mapFuelToRemote(tank, user.id)));
-  await replaceUserRows(TABLES.addressFavorites, user.id, data.favoriten.filter((fav) => fav.type === "address").map((fav) => mapAddressFavoriteToRemote(fav, user.id)));
-  await replaceUserRows(TABLES.fuelFavorites, user.id, data.favoriten.filter((fav) => fav.type === "fuelStation").map((fav) => mapFuelFavoriteToRemote(fav, user.id)));
+  remoteCapabilities = null;
+  const schema = await inspectSchema(supabase, user.id);
+  remoteCapabilities = schema;
+  if (!schema.fullTank && (data.tankvorgaenge.some(tank => tank.vollgetankt)
+    || data.fahrten.some(fahrt => fahrt.istKorrektur))) throw new Error(MIGRATION_MESSAGE);
+
+  if (!schema.deficitCorrection && data.fahrten.some(fahrt => fahrt.fehlbestandAusgleichen)) {
+    throw new Error("Fehlbestandskorrekturen benötigen zusätzlich migrations/20261008_fehlbestand.sql. Es wurden keine Daten gelöscht.");
+  }
+
+  const batches = [
+    { table: TABLES.trips, rows: data.fahrten.map(fahrt => mapTripToRemote(fahrt, user.id)), sample: mapTripToRemote({}, user.id) },
+    { table: TABLES.fuel, rows: data.tankvorgaenge.map(tank => mapFuelToRemote(tank, user.id)), sample: mapFuelToRemote({}, user.id) },
+    { table: TABLES.addressFavorites, rows: data.favoriten.filter(fav => fav.type === "address").map(fav => mapAddressFavoriteToRemote(fav, user.id)), sample: mapAddressFavoriteToRemote({}, user.id) },
+    { table: TABLES.fuelFavorites, rows: data.favoriten.filter(fav => fav.type === "fuelStation").map(fav => mapFuelFavoriteToRemote(fav, user.id)), sample: mapFuelFavoriteToRemote({}, user.id) },
+  ].map(batch => ({ table: batch.table, rows: compatibleRows(batch.table, batch.rows, schema),
+    columns: Object.keys(compatibleRows(batch.table, [batch.sample], schema)[0]) }));
+  await preflightRows(supabase, user.id, batches);
+  for (const { table, rows } of batches) await replaceUserRows(table, user.id, rows);
 }
 
 async function replaceUserRows(table, userId, rows) {
@@ -95,6 +117,7 @@ function mapTripsFromRemote(rows) {
       id: makeId(datum, index),
       datum,
       index,
+      berechnungsPosition: row.berechnungs_position == null ? null : Number(row.berechnungs_position),
       start: row.start,
       ziel: row.ziel,
       zwischenziele: Array.isArray(row.zwischenziele) ? row.zwischenziele : [],
@@ -105,6 +128,10 @@ function mapTripsFromRemote(rows) {
       notizen: row.notizen || "",
       createdAt: row.created_at,
       remoteId: row.id,
+      istKorrektur: Boolean(row.ist_korrektur),
+      fehlbestandAusgleichen: Boolean(row.fehlbestand_ausgleichen),
+      korrekturTankKennung: row.korrektur_tank_kennung || null,
+      korrekturLiter: Number(row.korrektur_liter) || 0,
     });
   }
   return local;
@@ -121,10 +148,14 @@ function mapFuelFromRemote(rows) {
       datum,
       datumZeit: row.datum || row.created_at || null,
       index,
+      berechnungsPosition: row.berechnungs_position == null ? null : Number(row.berechnungs_position),
       liter: Number(row.liter) || 0,
       preisProLiter: Number(row.preis_pro_liter) || 0,
       ort: row.tankstelle || "",
-      notizen: "",
+      notizen: row.notizen || "",
+      lokaleKennung: row.lokale_kennung || crypto.randomUUID(),
+      vollgetankt: Boolean(row.vollgetankt),
+      zielbestandLiter: row.zielbestand_liter == null ? null : Number(row.zielbestand_liter),
       gesamtpreis: 0,
       createdAt: row.created_at,
     });
@@ -137,6 +168,11 @@ function mapTripToRemote(fahrt, userId) {
     user_id: userId,
     datum: fahrt.datum,
     ordnungsfaktor: Number(fahrt.index) || 1,
+    berechnungs_position: fahrt.berechnungsPosition,
+    ist_korrektur: Boolean(fahrt.istKorrektur),
+    fehlbestand_ausgleichen: Boolean(fahrt.fehlbestandAusgleichen),
+    korrektur_tank_kennung: fahrt.korrekturTankKennung || null,
+    korrektur_liter: fahrt.istKorrektur ? fahrt.korrekturLiter : null,
     start: fahrt.start,
     ziel: fahrt.ziel,
     zwischenziele: fahrt.zwischenziele || [],
@@ -155,6 +191,11 @@ function mapFuelToRemote(tank, userId) {
     preis_pro_liter: Number(tank.preisProLiter) || 0,
     created_at: tank.createdAt || new Date().toISOString(),
     tankstelle: tank.ort || "",
+    lokale_kennung: tank.lokaleKennung,
+    berechnungs_position: tank.berechnungsPosition,
+    vollgetankt: Boolean(tank.vollgetankt),
+    zielbestand_liter: tank.vollgetankt ? tank.zielbestandLiter : null,
+    notizen: tank.notizen || "",
   };
 }
 

@@ -38,7 +38,7 @@ function filterPeriod(data) {
   const from = document.querySelector("#chartFrom")?.value || "";
   const to = document.querySelector("#chartTo")?.value || "";
   return {
-    trips: [...data.fahrten]
+    trips: data.fahrten.filter((fahrt) => !fahrt.istKorrektur)
       .filter((fahrt) => !from || fahrt.datum >= from)
       .filter((fahrt) => !to || fahrt.datum <= to)
       .sort((a, b) => a.datum.localeCompare(b.datum) || a.index - b.index),

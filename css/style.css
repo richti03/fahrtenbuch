@@ -447,3 +447,15 @@ dialog {
   .tabs.menu-open { display: grid; grid-template-columns: 1fr; }
   .tabs .tab { min-width: 0; min-height: 44px; text-align: left; font-size: 15px; white-space: normal; }
 }
+
+.correction-row, .correction-note { background: rgba(217, 151, 38, .14); }
+.correction-row { box-shadow: inset 3px 0 #d99726; }
+.correction-note { padding: .6rem; border-radius: .4rem; margin: .5rem 0; }
+
+.full-tank-check { display: flex; align-items: center; gap: .7rem; min-height: 44px; cursor: pointer; }
+.full-tank-check input[type="checkbox"] { width: 1.15rem; height: 1.15rem; min-height: 0; flex: 0 0 auto; margin: 0; padding: 0; accent-color: var(--accent, #0f766e); }
+.full-tank-check input:disabled { cursor: not-allowed; }
+.fuel-info { color: var(--muted); font-size: 13px; }
+.fuel-info summary { cursor: pointer; width: fit-content; padding: .25rem 0; }
+.fuel-info summary:focus-visible { outline: 2px solid var(--accent, #0f766e); outline-offset: 3px; border-radius: .25rem; }
+.fuel-info p { line-height: 1.6; margin: .6rem 0 0; }

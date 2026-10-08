@@ -1,4 +1,4 @@
-import { makeId, nextIndex } from "./fifo.js";
+import { makeId, nextIndex, nextCalculationPosition } from "./fifo.js";
 import { escapeHtml, normalizeFavoriteAddress } from "./favorites.js";
 import { formatFuelPrice, formatMoney, formatNumber } from "./tanken.js";
 
@@ -13,8 +13,12 @@ export function upsertTrip(data, form) {
   const index = manualIndex > 0 ? manualIndex : old && old.datum === datum ? old.index : nextIndex(data.fahrten, datum, editingId);
   const zwischenziele = [...document.querySelectorAll("[data-waypoint]")].map((input) => normalizeFavoriteAddress(data, input.value)).filter(Boolean);
   const notizen = withAutomaticWaypointNote(form.notizen.value.trim(), zwischenziele);
+  const nextPosition = nextCalculationPosition(data, datum);
+  const berechnungsPosition = old && old.datum === datum ? old.berechnungsPosition : nextPosition;
   const record = {
     id: makeId(datum, index),
+    berechnungsPosition,
+    fehlbestandAusgleichen: Boolean(old?.fehlbestandAusgleichen),
     datum,
     index,
     start: normalizeFavoriteAddress(data, form.start.value),
@@ -29,6 +33,7 @@ export function upsertTrip(data, form) {
   };
   if (old) data.fahrten.splice(data.fahrten.indexOf(old), 1, record);
   else data.fahrten.push(record);
+  return record;
 }
 
 function withAutomaticWaypointNote(notes, waypoints) {
@@ -85,32 +90,31 @@ export function renderTrips(data, currency, onDetail) {
     .sort((a, b) => compare(a[sortKey], b[sortKey]) * sortDir);
 
   body.innerHTML = rows.map((fahrt) => `
-    <tr class="clickable" data-trip-detail="${fahrt.id}">
+    <tr class="clickable ${fahrt.istKorrektur ? "correction-row" : ""}" data-trip-detail="${fahrt.id}">
       <td data-label="Datum">${escapeHtml(formatTripDate(fahrt.datum))} ${fahrt.warnung ? `<span class="badge">Warnung</span>` : ""}</td>
-      <td data-label="Ordnung">${escapeHtml(formatTripOrder(fahrt))}</td>
       <td data-label="Start">${escapeHtml(fahrt.start)}</td>
       <td data-label="Ziel">${escapeHtml(fahrt.ziel)}</td>
-      <td data-label="Kilometer">${formatNumber(fahrt.kilometer, 1)} km</td>
-      <td data-label="Verbrauch / 100 km">${formatNumber(fahrt.verbrauchPro100km, 1)} L</td>
+      <td data-label="Kilometer">${fahrt.istKorrektur ? "—" : formatNumber(fahrt.kilometer, 1)} km</td>
+      <td data-label="Verbrauch / 100 km">${fahrt.istKorrektur ? "—" : formatNumber(fahrt.verbrauchPro100km, 1)} L</td>
       <td data-label="Verbrauchte Liter">${formatNumber(fahrt.verbrauchteLiter)} L</td>
       <td data-label="Kosten">${formatMoney(fahrt.kosten, currency)}</td>
       <td data-label="Notizen">${formatNotes(fahrt.notizen)}</td>
-    </tr>`).join("") || `<tr><td colspan="9" class="muted">Keine passenden Fahrten gefunden.</td></tr>`;
+    </tr>`).join("") || `<tr><td colspan="8" class="muted">Keine passenden Fahrten gefunden.</td></tr>`;
   body.querySelectorAll("[data-trip-detail]").forEach((row) => row.addEventListener("click", () => onDetail(row.dataset.tripDetail)));
 
   const cards = document.querySelector("#tripCards");
   cards.innerHTML = rows.map((fahrt) => `
-    <article class="mobile-card" data-trip-card="${fahrt.id}">
+    <article class="mobile-card ${fahrt.istKorrektur ? "correction-row" : ""}" data-trip-card="${fahrt.id}">
       <div class="card-head">
         <div>
-          <span class="card-kicker">${escapeHtml(formatTripLabel(fahrt))}</span>
+          <span class="card-kicker">${escapeHtml(formatTripDate(fahrt.datum))}</span>
           <strong>${escapeHtml(fahrt.start)} → ${escapeHtml(fahrt.ziel)}</strong>
         </div>
         ${fahrt.warnung ? `<span class="badge">Warnung</span>` : ""}
       </div>
       <div class="metric-row">
-        <span>${formatNumber(fahrt.kilometer, 1)} km</span>
-        <span>${formatNumber(fahrt.verbrauchPro100km, 1)} L/100</span>
+        <span>${fahrt.istKorrektur ? "—" : formatNumber(fahrt.kilometer, 1)} km</span>
+        <span>${fahrt.istKorrektur ? "—" : formatNumber(fahrt.verbrauchPro100km, 1)} L/100</span>
         <span>${formatMoney(fahrt.kosten, currency)}</span>
       </div>
       ${fahrt.zwischenziele?.length ? `<p class="card-sub">via ${fahrt.zwischenziele.map(escapeHtml).join(", ")}</p>` : ""}
@@ -126,24 +130,25 @@ function compare(a, b) {
 
 export function tripDetailHtml(fahrt, currency) {
   const waypoints = (fahrt.zwischenziele || []).length ? fahrt.zwischenziele.map(escapeHtml).join("<br>") : "Keine";
-  const parts = (fahrt.fifoAnteile || []).map((part) => `${formatNumber(part.liter)} L aus <button class="link-button" data-trip-fuel="${escapeHtml(part.tankId)}">${escapeHtml(part.tankId)}</button> zu ${formatFuelPrice(part.preisProLiter, currency)}`).join("<br>") || "Keine zugeordneten Tankmengen";
+  const parts = (fahrt.fifoAnteile || []).map((part) => `${formatNumber(part.liter)} L aus <button class="link-button" data-trip-fuel="${escapeHtml(part.tankId)}">${escapeHtml(part.tankId)}</button> zu ${formatFuelPrice(part.preisProLiter, currency)}${part.istKorrektur ? " [Bestandskorrektur]" : ""}`).join("<br>") || "Keine zugeordneten Tankmengen";
   return `
     <h2>${escapeHtml(formatTripLabel(fahrt))}</h2>
+    ${fahrt.istKorrektur ? `<p class="correction-note"><span class="badge">Bestandskorrektur</span> Automatisch erzeugt. Änderungen erfolgen über den <button class="link-button" data-trip-fuel="${escapeHtml(fahrt.korrekturTankId)}">Volltankvorgang</button>.</p>` : ""}
     <dl class="detail-grid">
       <dt>Datum</dt><dd>${escapeHtml(formatTripDate(fahrt.datum))}</dd>
       <dt>Ordnungsfaktor</dt><dd>${escapeHtml(formatTripOrder(fahrt))}</dd>
       <dt>Start</dt><dd>${escapeHtml(fahrt.start)}</dd>
       <dt>Zwischenziele</dt><dd>${waypoints}</dd>
       <dt>Ziel</dt><dd>${escapeHtml(fahrt.ziel)}</dd>
-      <dt>Kilometer</dt><dd>${formatNumber(fahrt.kilometer, 1)} km</dd>
-      <dt>Verbrauch / 100 km</dt><dd>${formatNumber(fahrt.verbrauchPro100km, 1)} L</dd>
+      <dt>Kilometer</dt><dd>${fahrt.istKorrektur ? "—" : formatNumber(fahrt.kilometer, 1)} km</dd>
+      <dt>Verbrauch / 100 km</dt><dd>${fahrt.istKorrektur ? "—" : formatNumber(fahrt.verbrauchPro100km, 1)} L</dd>
       <dt>Verbrauchte Liter</dt><dd>${formatNumber(fahrt.verbrauchteLiter)} L</dd>
       <dt>Kosten</dt><dd>${formatMoney(fahrt.kosten, currency)}</dd>
       <dt>FIFO</dt><dd>${parts}</dd>
       <dt>Notizen</dt><dd>${formatNotes(fahrt.notizen) || "Keine"}</dd>
     </dl>
     ${fahrt.warnung ? `<p class="warning">${escapeHtml(fahrt.warnung)} Nicht zugeordnet: ${formatNumber(fahrt.nichtZugeordneteLiter)} L.</p>` : ""}
-    <div class="actions"><button data-trip-edit="${fahrt.id}">Bearbeiten</button><button class="danger" data-trip-delete="${fahrt.id}">Löschen</button></div>`;
+    ${fahrt.istKorrektur ? "" : `<div class="actions"><button data-trip-edit="${fahrt.id}">Bearbeiten</button><button class="danger" data-trip-delete="${fahrt.id}">Löschen</button></div>`}`;
 }
 
 export function formatTripLabel(fahrt) {

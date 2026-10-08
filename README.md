@@ -219,7 +219,7 @@ Die FIFO-Logik liegt in:
 js/fifo.js
 ```
 
-Die Berechnung verarbeitet Tankvorgaenge und Fahrten chronologisch nach Datum und internem Index/Ordnungsfaktor. Nach jeder Aenderung wird der komplette Verlauf neu berechnet.
+Die Berechnung verarbeitet Tankvorgaenge und Fahrten chronologisch nach Datum und gespeicherter Berechnungsposition innerhalb des Tages. Nach jeder Aenderung wird der komplette Verlauf neu berechnet.
 
 Fuer jede Fahrt werden berechnet:
 
@@ -303,3 +303,133 @@ Die Berechnung und Oberfläche liegen in `js/simulation.js`. Tests ausführen:
 ```bash
 node tests/simulation.test.mjs
 ```
+
+## Volltankabgleich und Supabase-Migration
+
+Für Volltankabgleiche im Supabase SQL Editor den Inhalt von
+`migrations/20261007_volltankabgleich.sql` ausführen. Die Migration ergänzt nur
+Spalten und lässt sich wiederholt ausführen; bestehende RLS-Regeln bleiben gültig.
+
+Im Tankformular „Vollgetankt – Bestand abgleichen“ aktivieren. Der Zielbestand
+wird aus dem eingestellten Tankvolumen vorbelegt und pro Tankvorgang gespeichert.
+Die Berechnung erfolgt nach Datum und gespeicherter Tagesposition. Neue Tankungen
+folgen auf alle bereits erfassten Ereignisse desselben Tages. Damit werden alle
+bisher erfassten Fahrten bis einschließlich des Tanktags berücksichtigt. Später
+erfasste Fahrten desselben Tages und spätere Kalendertage folgen danach.
+Die sichtbaren Ordnungsfaktoren sind unabhängig von der Berechnungsposition.
+Spätere Änderungen des allgemeinen Tankvolumens ändern frühere Zielbestände nicht.
+
+Fehlender Bestand wird als zusätzliche FIFO-Schicht zum mengengewichteten
+Durchschnittspreis der Restbestände nach der tatsächlichen Tankung ergänzt.
+Der Preis wird intern nicht auf Cent gerundet. Überschüssiger Bestand wird aus den
+ältesten FIFO-Schichten entnommen und als automatische Korrekturfahrt gespeichert.
+Korrekturen tragen den Tag `[Bestandskorrektur]` und sind optisch hervorgehoben.
+Sie werden über den Tankvorgang verwaltet, bei Änderungen neu berechnet und beim
+Löschen der zugehörigen Tankung entfernt.
+
+Korrekturfahrten sind aus allen Dashboard-Kennzahlen, Diagrammen und der
+Verbrauchsprognose ausgeschlossen. Zusätzliche Bestandsschichten zählen nicht als
+Tankausgaben; echte Fahrten, die diese Schichten verbrauchen, erhalten deren Kosten.
+Tankdetails trennen tatsächliche Tankmenge, Korrektur und korrigierten Restbestand.
+Tanknotizen und stabile Kennungen werden ebenfalls synchronisiert. Bestehende Daten
+ohne Volltankkennzeichnung werden nicht rückwirkend abgeglichen.
+
+Die bestehende Synchronisierung ersetzt die Benutzerzeilen tabellenweise und ist
+nicht transaktional. Die Zuordnung verwendet deshalb eine stabile logische
+Tankkennung ohne neuen Fremdschlüssel.
+
+Zusätzliche Tests: `node tests/volltank.test.mjs`.
+
+### Migration der Berechnungsreihenfolge
+
+Zusätzlich `migrations/20261007_berechnungsposition.sql` im Supabase SQL Editor
+vor Verwendung von Volltankabgleichen ausführen. Beide Migrationen sind für eine neue
+Installation nötig. Die Tagesposition wird für Fahrten und Tankungen synchronisiert
+und im JSON-Export gespeichert. Bearbeitungen erhalten die Position; ein Datumswechsel
+ordnet den Eintrag am neuen Tag hinten ein. Neue Fahrten werden ebenfalls hinten
+angefügt, unabhängig vom sichtbaren Ordnungsfaktor.
+
+Alte Einträge ohne Position übernehmen zunächst die bisherige Tagesreihenfolge;
+Volltankungen ohne Position werden hinter die übrigen Ereignisse desselben Tages
+verschoben, untereinander in bisheriger Tankreihenfolge. Bestehende automatische
+Korrekturen werden neu berechnet. Die Positionen werden beim nächsten regulären
+Speichern nach Supabase übertragen. Bereits gespeicherte Positionen bleiben stabil.
+
+Regressionstests zur Tagesreihenfolge: `node tests/berechnungsposition.test.mjs`.
+
+### Kompatibilität mit älteren Supabase-Tabellen
+
+Normale Fahrten und Tankungen bleiben ohne die neuen Migrationen speicherbar.
+Die App prüft die optionalen Spalten durch lesende Abfragen und sendet nur
+unterstützte Erweiterungsfelder. Vor jeder Speicherung werden außerdem die
+Payload-Spalten aller vier Tabellen geprüft, bevor die erste Zeile gelöscht wird.
+Netzwerk- oder Berechtigungsfehler brechen die Speicherung ab.
+
+Volltankabgleiche sind im Formular bis zur erfolgreichen Schema-Prüfung gesperrt.
+Enthält der Datenbestand Volltankungen oder Korrekturfahrten, wird bei fehlenden
+Erweiterungen die gesamte Speicherung vor jeder Löschung abgebrochen. Beide
+Migrationen werden benötigt; ein Volltankabgleich wird nicht verlustbehaftet in
+normale Einträge umgewandelt. Ohne gespeicherte Tagespositionen gilt nach erneutem
+Laden die alte Tagesreihenfolge. Nach Migration erneut anmelden oder eine reguläre
+Speicherung auslösen, um die Schema-Prüfung zu aktualisieren.
+
+Anmeldung und Laden speichern nicht automatisch. Bei Synchronisierungsfehlern
+bleiben die sichtbaren Daten im Speicher und können über JSON exportiert werden.
+Vor Neuladen oder Abmelden zuerst exportieren. Eine nachträgliche Migration stellt
+bereits gelöschte Daten nicht wieder her; noch im Speicher vorhandene Daten können
+nach der Migration durch eine reguläre Speicherung erneut übertragen werden.
+Die Speicherung bleibt tabellenweise und nicht transaktional: Die Schema-Prüfung
+verhindert Löschungen wegen vorher erkennbarer fehlender Spalten, verhindert aber
+keine späteren Netzwerk-, Constraint- oder Schreibberechtigungsfehler.
+
+Tests für Schema-Kompatibilität: `node tests/supabase-schema.test.mjs`.
+
+### Korrekturzeilen und Zustimmung
+
+Positive Bestandskorrekturen erscheinen als eigene, hervorgehobene Zeilen und
+mobile Karten unter Tanken. Die tatsächliche Tankung bleibt eine separate Zeile.
+Negative Korrekturen erscheinen als eigene Korrekturfahrten. Korrekturzeilen zählen
+weiterhin nicht zu den Dashboard-Statistiken.
+
+Vor dem Anlegen oder Ändern einer Korrektur öffnet sich eine Übersicht mit
+Tankvorgang, berechnetem Bestand, Zielbestand, Literdifferenz und Bewertung.
+„Korrekturen übernehmen“ bestätigt die Änderung. „Tankung ohne Abgleich speichern“
+übernimmt nur die tatsächliche Tankung; „Abbrechen“ oder Escape verwirft die
+Änderung. Beim Abbrechen einer Tankung bleiben die Eingaben im Formular erhalten.
+Auch Änderungen und Entfernungen von Korrekturen durch historische Änderungen
+werden vor dem Speichern geprüft. Bereits bestätigte Volltankabgleiche werden
+beim Laden aus den gespeicherten Daten wiederhergestellt.
+
+Für diese Darstellung und Zustimmung sind keine zusätzlichen Supabase-Spalten
+nötig. Positive Zeilen werden aus dem bestätigten Volltankvorgang abgeleitet;
+negative Korrekturfahrten werden weiterhin in fahrten gespeichert.
+
+Tests: `node tests/correction-review.test.mjs`.
+
+### Korrekturdetails und Fehlbestandsausgleich
+
+Eine positive Volltankkorrektur steht in Tabelle und Mobilansicht oberhalb des
+Haupttankvorgangs. Ihr eigener Detaildialog zeigt Menge, Bewertung, Verbrauch und
+Restbestand. Bearbeitung ist ausschließlich über den verlinkten Haupttankvorgang
+möglich.
+
+Für Korrekturtankungen bei Fahrten zusätzlich `migrations/20261008_fehlbestand.sql`
+ausführen. Die neue optionale Fahrtspalte `fehlbestand_ausgleichen` erhält die
+Zustimmung zum Ausgleich. Auch die Berechnungspositionen müssen vorhanden sein.
+Normale Fahrten bleiben mit älteren Schemas speicherbar; bestätigte Ausgleichsfahrten
+werden bei fehlenden Spalten vor jeder Löschung blockiert.
+
+Überschreitet eine neue oder bearbeitete Fahrt den verfügbaren Bestand, zeigt die
+Vorschau eine Korrekturtankung über die fehlenden Liter zum letzten tatsächlichen
+Tankpreis in der Berechnungsreihenfolge. Nach Zustimmung wird diese unmittelbar
+vor der Fahrt ergänzt und durch die Fahrt vollständig verbraucht. Die synthetische
+Tankung erscheint als eigene Zeile unter Tanken, ohne die tatsächlichen Tankausgaben
+oder getankten Liter im Dashboard zu erhöhen. Ihre Kosten gehen in die echte Fahrt
+ein. Die Detailansicht verlinkt den Fahrteintrag; Änderungen erfolgen über die Fahrt.
+
+„Fahrt ohne Ausgleich speichern“ erhält die Fehlbestandswarnung. Ohne früheren
+Tankpreis oder passende Migration wird nur gewarnt und kein bewerteter Ausgleich
+angelegt. Bestehende Fahrten werden nicht rückwirkend automatisch ausgeglichen.
+Bei Änderungen und Löschung einer bestätigten Fahrt wird ihre abgeleitete Tankung
+aktualisiert beziehungsweise entfernt; die Änderungen erscheinen in der Vorschau.
+Tests: `node tests/fehlbestand.test.mjs`.

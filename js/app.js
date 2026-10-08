@@ -1,33 +1,98 @@
+import { correctionChanges } from "./correction-review.js";
+import { escapeHtml } from "./favorites.js";
+import { formatNumber, formatMoney, formatFuelIdentification } from "./tanken.js";
 import { downloadJson, loadData, saveData } from "./storage.js";
 import { favoriteOptions, fuelStationOptions, renderFavorites } from "./favorites.js";
 import { addWaypoint, bindTripSorting, editableNotes, renderTrips, setWaypoints, tripDetailHtml, upsertTrip } from "./fahrten.js";
-import { fuelDetailHtml, formatFuelDateTimeInput, renderFuel, upsertFuel } from "./tanken.js";
+import { correctionFuelDetailHtml, fuelDetailHtml, formatFuelDateTimeInput, renderFuel, upsertFuel } from "./tanken.js";
 import { renderDashboard } from "./dashboard.js";
-import { getCurrentUser, loadRemoteData, saveRemoteData, signIn, signOut, signUp } from "./supabase-sync.js";
+import { getCurrentUser, getRemoteCapabilities, loadRemoteData, saveRemoteData, signIn, signOut, signUp } from "./supabase-sync.js";
 
 import { bindSimulation, renderSimulation } from "./simulation.js";
 
 let data = loadData();
+let acceptedData = structuredClone(data);
+let reviewPending = false;
 let currentUser = null;
 let syncing = false;
+let remoteReady = false;
 const $ = (selector) => document.querySelector(selector);
 
-async function persist() {
-  data = saveData(data);
+function reviewCorrections(changes, currency, allowDecline, declineLabel = "Tankung ohne Abgleich speichern") {
+  const dialog = $("#correctionDialog");
+  $("#correctionOverview").innerHTML = changes.map(({ tank, before, after, kind, tripId }) => {
+    if (kind === "deficit") return `<article class="correction-note"><h3>Fehlender Kraftstoff für Fahrt ${escapeHtml(tripId)}</h3>
+      <p>${after ? "Der Fahrtverbrauch überschreitet den erfassten Tankbestand. Eine eigene Korrekturtankung gleicht die fehlenden Liter aus." : "Die bisherige Korrekturtankung wird entfernt."}</p>
+      ${before ? `<p>Bisher: ${formatNumber(before.liter)} L · ${formatMoney(before.wert, currency)}</p>` : ""}
+      ${after ? `<dl class="detail-grid"><dt>Fehlmenge</dt><dd>${formatNumber(after.liter)} L</dd>
+        <dt>Letzter Tankpreis</dt><dd>${formatNumber(after.preisProLiter, 5)} ${escapeHtml(currency)} / L</dd>
+        <dt>Korrekturwert</dt><dd>${formatMoney(after.wert, currency)}</dd></dl>` : ""}</article>`;
+    return `
+    <article class="correction-note">
+      <h3>${escapeHtml(formatFuelIdentification(tank))}</h3>
+      <p>${after ? after.liter > 0 ? "Eigene Zeile unter Tanken: Bestandskorrektur" : "Eigene Zeile unter Fahrten: Korrekturfahrt" : "Bestehende Korrektur entfernen"}</p>
+      ${before ? `<p>Bisher: ${formatNumber(before.liter)} L · ${formatMoney(before.wert, currency)}</p>` : ""}
+      ${after ? `<dl class="detail-grid"><dt>Tatsächlich getankt</dt><dd>${formatNumber(tank.liter)} L</dd>
+        <dt>Berechneter Bestand nach Tankung</dt><dd>${formatNumber(tank.zielbestandLiter - after.liter)} L</dd>
+        <dt>Zielbestand</dt><dd>${formatNumber(tank.zielbestandLiter)} L</dd>
+        <dt>Korrektur</dt><dd>${after.liter > 0 ? "+" : ""}${formatNumber(after.liter)} L</dd>
+        <dt>${after.liter > 0 ? "Bestandsmittelwert / Liter" : "FIFO-Abschreibung"}</dt>
+        <dd>${after.liter > 0 ? formatNumber(after.preisProLiter, 5) + " " + escapeHtml(currency) : formatMoney(-after.wert, currency)}</dd>
+        <dt>Wertänderung</dt><dd>${formatMoney(after.wert, currency)}</dd></dl>` : ""}
+    </article>`; }).join("");
+  $("#declineCorrection").textContent = declineLabel;
+  $("#declineCorrection").classList.toggle("hidden", !allowDecline);
+  dialog.returnValue = "cancel";
+  return new Promise(resolve => {
+    dialog.addEventListener("close", () => resolve(dialog.returnValue || "cancel"), { once: true });
+    dialog.showModal();
+  });
+}
+
+async function persist({ declineTankKennung = null, declineTripId = null } = {}) {
+  if (reviewPending) return false;
+  const candidate = saveData(structuredClone(data));
+  const accountId = currentUser?.id;
+  data = structuredClone(acceptedData);
+  let changes = correctionChanges(acceptedData, candidate);
+  if (changes.length) {
+    reviewPending = true;
+    try {
+      const choice = await reviewCorrections(changes, candidate.einstellungen.waehrung, Boolean(declineTankKennung || declineTripId), declineTripId ? "Fahrt ohne Ausgleich speichern" : "Tankung ohne Abgleich speichern");
+      if (choice === "decline" && (declineTankKennung || declineTripId)) {
+        const tank = candidate.tankvorgaenge.find(item => item.lokaleKennung === declineTankKennung);
+        if (tank) { tank.vollgetankt = false; tank.zielbestandLiter = null; }
+        if (declineTripId) candidate.fahrten.find(trip => trip.id === declineTripId).fehlbestandAusgleichen = false;
+        saveData(candidate);
+        // Historical changes can affect other approved reconciliations too.
+        changes = correctionChanges(acceptedData, candidate).filter(change => !(declineTankKennung && change.tank.lokaleKennung === declineTankKennung) && !(declineTripId && change.tripId === declineTripId));
+        if (changes.length && await reviewCorrections(changes, candidate.einstellungen.waehrung, false) !== "approve") return false;
+      } else if (choice !== "approve") return false;
+    } finally {
+      reviewPending = false;
+    }
+  }
+  if (currentUser?.id !== accountId) return false;
+  data = candidate;
+  acceptedData = structuredClone(data);
   render();
-  if (!currentUser || syncing) return;
+  if (!currentUser || syncing || !remoteReady) return true;
   try {
     setSyncStatus("Synchronisiere...");
     await saveRemoteData(data);
+    syncFuelAvailability();
     setSyncStatus(`Synchronisiert als ${currentUser.email}.`);
   } catch (error) {
+    syncFuelAvailability();
     setSyncStatus(`Synchronisierung fehlgeschlagen: ${error.message}`);
   }
+  return true;
 }
 
 function render() {
   document.body.classList.toggle("dark", Boolean(data.einstellungen.darkMode));
   syncSettingsForm();
+  syncFuelAvailability();
   $("#favoriteAddresses").innerHTML = favoriteOptions(data);
   $("#fuelStationFavorites").innerHTML = fuelStationOptions(data);
   renderDashboard(data);
@@ -49,11 +114,28 @@ function resetTripForm() {
   setWaypoints([], saveFavoriteFromAddress);
 }
 
+function syncFuelAvailability() {
+  const schema = getRemoteCapabilities();
+  const enabled = Boolean(currentUser && remoteReady && schema?.fullTank);
+  const form = $("#fuelForm");
+  form.vollgetankt.disabled = !enabled;
+  form.zielbestandLiter.disabled = !enabled || !form.vollgetankt.checked;
+  const hint = $("#fuelSchemaHint");
+  hint.textContent = !currentUser ? "Volltankabgleich ist nach Anmeldung und Schema-Prüfung verfügbar."
+    : !remoteReady || !schema ? "Volltankabgleich ist bis zur erfolgreichen Schema-Prüfung gesperrt."
+    : !schema.fullTank ? "Volltankabgleich gesperrt: Bitte migrations/20261007_volltankabgleich.sql und migrations/20261007_berechnungsposition.sql in Supabase ausführen. Normale Fahrten und Tankungen bleiben speicherbar."
+    : "";
+  hint.classList.toggle("hidden", enabled);
+}
+
 function resetFuelForm() {
   $("#fuelForm").reset();
   $("#fuelForm").datum.value = formatFuelDateTimeInput(new Date());
   $("#fuelForm").editingId.value = "";
+  $("#fuelForm").zielbestandLiter.value = data.einstellungen.tankvolumen;
+  $("#fuelForm").zielbestandLiter.disabled = true;
   $("#fuelFormTitle").textContent = "Neuer Tankvorgang";
+  syncFuelAvailability();
 }
 
 function resetFavoriteForm() {
@@ -71,11 +153,11 @@ function showTripDetail(id, backFuelId = "") {
       showFuelDetail(button.dataset.tripFuel);
     });
   });
-  $("#tripDetail [data-trip-edit]").addEventListener("click", () => {
+  $("#tripDetail [data-trip-edit]")?.addEventListener("click", () => {
     $("#tripDialog").close();
     editTrip(id);
   });
-  $("#tripDetail [data-trip-delete]").addEventListener("click", () => {
+  $("#tripDetail [data-trip-delete]")?.addEventListener("click", () => {
     $("#tripDialog").close();
     deleteTrip(id);
   });
@@ -89,14 +171,20 @@ function showTripDetail(id, backFuelId = "") {
   $("#tripDialog").showModal();
 }
 
-function showFuelDetail(id) {
-  const tank = data.tankvorgaenge.find((item) => item.id === id);
-  $("#fuelDetail").innerHTML = fuelDetailHtml(tank, data.einstellungen.waehrung);
-  $("#fuelDetail [data-fuel-edit]").addEventListener("click", () => {
+function showFuelDetail(id, correctionOnly = false) {
+  const tank = data.tankvorgaenge.find((item) => item.id === id)
+    || data.berechnung.korrekturtankvorgaenge?.find(item => item.id === id);
+  if (!tank) return;
+  $("#fuelDetail").innerHTML = correctionOnly || tank.istKorrektur
+    ? correctionFuelDetailHtml(tank, data.einstellungen.waehrung) : fuelDetailHtml(tank, data.einstellungen.waehrung);
+  $("#fuelDetail [data-correction-main-fuel]")?.addEventListener("click", () => {
+    $("#fuelDialog").close(); showFuelDetail(id);
+  });
+  $("#fuelDetail [data-fuel-edit]")?.addEventListener("click", () => {
     $("#fuelDialog").close();
     editFuel(id);
   });
-  $("#fuelDetail [data-fuel-delete]").addEventListener("click", () => {
+  $("#fuelDetail [data-fuel-delete]")?.addEventListener("click", () => {
     $("#fuelDialog").close();
     deleteFuel(id);
   });
@@ -139,7 +227,11 @@ function editFuel(id) {
   form.liter.value = tank.liter;
   form.preisProLiter.value = tank.preisProLiter;
   form.ort.value = tank.ort || "";
+  form.vollgetankt.checked = Boolean(tank.vollgetankt);
+  form.zielbestandLiter.value = tank.zielbestandLiter ?? data.einstellungen.tankvolumen;
+  form.zielbestandLiter.disabled = !tank.vollgetankt;
   form.notizen.value = tank.notizen || "";
+  syncFuelAvailability();
   $("#fuelFormTitle").textContent = `Tankvorgang ${tank.id} bearbeiten`;
   openView("tanken");
 }
@@ -236,17 +328,34 @@ function bind() {
   ["#tripSearch", "#tripFrom", "#tripTo", "#kmMin", "#kmMax", "#consMin", "#consMax", "#chartFrom", "#chartTo"].forEach((id) => $(id).addEventListener("input", render));
   bindTripSorting(render);
 
-  $("#tripForm").addEventListener("submit", (event) => {
+  $("#tripForm").addEventListener("submit", async (event) => {
     event.preventDefault();
-    upsertTrip(data, event.currentTarget);
-    resetTripForm();
-    persist();
+    const trip = upsertTrip(data, event.currentTarget);
+    trip.fehlbestandAusgleichen = Boolean(remoteReady && getRemoteCapabilities()?.deficitCorrection);
+    const preview = saveData(structuredClone(data));
+    const proposedTrip = preview.fahrten.find(item => item.id === trip.id);
+    if (proposedTrip.nichtZugeordneteLiter > 0) {
+      trip.fehlbestandAusgleichen = false;
+      alert(getRemoteCapabilities()?.deficitCorrection
+        ? "Die Fahrt überschreitet den Tankbestand. Ohne früheren Tankpreis kann keine Korrekturtankung bewertet werden. Die Fahrt erhält eine Fehlbestandswarnung."
+        : "Die Fahrt überschreitet den Tankbestand. Für den automatischen Ausgleich fehlt die Migration migrations/20261008_fehlbestand.sql oder die Berechnungsposition. Die Fahrt erhält eine Fehlbestandswarnung.");
+    }
+    if (await persist({ declineTripId: trip.id })) resetTripForm();
   });
-  $("#fuelForm").addEventListener("submit", (event) => {
+  $("#fuelForm").vollgetankt.addEventListener("change", (event) => {
+    $("#fuelForm").zielbestandLiter.disabled = !event.target.checked;
+  });
+  $("#fuelForm").addEventListener("submit", async (event) => {
     event.preventDefault();
-    upsertFuel(data, event.currentTarget);
-    resetFuelForm();
-    persist();
+    if (event.currentTarget.vollgetankt.checked && !(remoteReady && getRemoteCapabilities()?.fullTank)) {
+      alert("Volltankabgleich benötigt eine erfolgreiche Schema-Prüfung und beide Supabase-Migrationen.");
+      return;
+    }
+    let tank;
+    try { tank = upsertFuel(data, event.currentTarget); }
+    catch (error) { alert(error.message); return; }
+    const approved = await persist({ declineTankKennung: tank?.vollgetankt ? tank.lokaleKennung : null });
+    if (approved) resetFuelForm();
   });
   $("#favoriteForm").addEventListener("submit", (event) => {
     event.preventDefault();
@@ -263,6 +372,7 @@ function bind() {
     data.einstellungen.tankvolumen = Number(event.currentTarget.tankvolumen.value) || 0;
     data.einstellungen.waehrung = event.currentTarget.waehrung.value.trim() || "EUR";
     data.einstellungen.darkMode = event.currentTarget.darkMode.checked;
+    if (!$("#fuelForm").editingId.value) $("#fuelForm").zielbestandLiter.value = data.einstellungen.tankvolumen;
     persist();
   });
   $("#exportData").addEventListener("click", () => downloadJson(data, "fahrtenbuch-export"));
@@ -282,12 +392,13 @@ function bind() {
 async function authenticate(email, password, createAccount, closeStart = false) {
   try {
     if (!email || !password) throw new Error("Bitte E-Mail und Passwort eingeben.");
+    remoteReady = false;
+    syncFuelAvailability();
     setSyncStatus(createAccount ? "Registriere..." : "Melde an...");
     currentUser = createAccount ? await signUp(email, password) : await signIn(email, password);
     if (!currentUser) throw new Error("Bitte bestätige ggf. deine E-Mail und melde dich danach an.");
     await loadFromSupabase();
     data.einstellungen.initialized = true;
-    await persist();
     if (closeStart) $("#startDialog").close();
   } catch (error) {
     setSyncStatus(`Anmeldung fehlgeschlagen: ${error.message}`);
@@ -297,16 +408,19 @@ async function authenticate(email, password, createAccount, closeStart = false) 
 
 async function loadFromSupabase() {
   syncing = true;
+  remoteReady = false;
+  syncFuelAvailability();
   try {
     const remote = await loadRemoteData();
     if (remote) {
       data = remote;
       data.einstellungen.initialized = true;
       data = saveData(data);
+      acceptedData = structuredClone(data);
     } else {
-      data.einstellungen.initialized = true;
-      await saveRemoteData(data);
+      throw new Error("Keine angemeldete Sitzung zum Laden vorhanden.");
     }
+    remoteReady = true;
     render();
   } finally {
     syncing = false;
@@ -316,6 +430,7 @@ async function loadFromSupabase() {
 async function logout() {
   await signOut();
   currentUser = null;
+  remoteReady = false;
   setSyncStatus("Nicht angemeldet.");
   render();
 }

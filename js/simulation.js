@@ -20,7 +20,7 @@ export function estimateConsumption(trips, kilometers, referenceDate = today()) 
   if (!positive(kilometers)) return null;
   const reference = dayNumber(referenceDate);
   if (!Number.isFinite(reference)) return null;
-  const valid = trips.filter((trip) => positive(trip.kilometer) && positive(trip.verbrauchPro100km)
+  const valid = trips.filter((trip) => !trip.istKorrektur && positive(trip.kilometer) && positive(trip.verbrauchPro100km)
     && Number.isFinite(dayNumber(trip.datum)) && dayNumber(trip.datum) <= reference);
   if (!valid.length) return null;
   // Normalize time weights against the newest trip to avoid underflow for old histories.
